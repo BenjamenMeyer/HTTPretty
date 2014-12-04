@@ -1026,9 +1026,11 @@ def httprettified(test):
             httpretty.reset()
             httpretty.enable()
             try:
-                return test(*args, **kw)
+                returnValue = test(*args, **kw)
             finally:
                 httpretty.disable()
+                httpretty.reset()
+                return returnValue
         return wrapper
 
     if isinstance(test, ClassTypes):
