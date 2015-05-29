@@ -33,8 +33,10 @@ from httpretty.http import STATUSES
 
 try:
     from mock import MagicMock
+    from mock import patch
 except ImportError:
     from unittest.mock import MagicMock
+    from unittest.mock import patch
 
 TEST_HEADER = """
 GET /test/test.html HTTP/1.1
@@ -353,6 +355,18 @@ def test_fake_socket_passes_through_shutdown():
     expect(s.shutdown).called_with(socket.SHUT_RD).should_not.throw(AttributeError)
     s.truesock.shutdown.assert_called_with(socket.SHUT_RD)
 
+def test_unix_socket():
+    import socket
+    HTTPretty.enable()
+
+    # Create a UDS socket
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server_address = './not-exist-socket'
+    try:
+        sock.connect(server_address)
+    except socket.error:
+        # We expect this, since the server_address does not exist
+        pass
 
 def test_HTTPrettyRequest_json_body():
     """ A content-type of application/json should parse a valid json body """
@@ -385,3 +399,25 @@ def test_HTTPrettyRequest_arbitrarypost():
     gibberish_body = "1234567890!@#$%^&*()"
     request = HTTPrettyRequest(header, gibberish_body)
     expect(request.parsed_body).to.equal(gibberish_body)
+
+
+def test_socktype_bad_python_version_regression():
+    """ Some versions of python accidentally internally shadowed the SockType
+    variable, so it was no longer the socket object but and int Enum representing
+    the socket type e.g. AF_INET. Make sure we don't patch SockType in these cases
+    https://bugs.python.org/issue20386
+    """
+    import socket
+    someObject = object()
+    with patch('socket.SocketType', someObject):
+        HTTPretty.enable()
+        expect(socket.SocketType).to.equal(someObject)
+        HTTPretty.disable()
+
+
+def test_socktype_good_python_version():
+    import socket
+    with patch('socket.SocketType', socket.socket):
+        HTTPretty.enable()
+        expect(socket.SocketType).to.equal(socket.socket)
+        HTTPretty.disable()
