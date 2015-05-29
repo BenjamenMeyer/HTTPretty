@@ -73,6 +73,7 @@ from datetime import timedelta
 from errno import EAGAIN
 
 old_socket = socket.socket
+old_SocketType = socket.SocketType
 old_create_connection = socket.create_connection
 old_gethostbyname = socket.gethostbyname
 old_gethostname = socket.gethostname
@@ -962,7 +963,7 @@ class httpretty(HttpBaseClass):
     def disable(cls):
         cls._is_enabled = False
         socket.socket = old_socket
-        socket.SocketType = old_socket
+        socket.SocketType = old_SocketType
         socket._socketobject = old_socket
 
         socket.create_connection = old_create_connection
@@ -972,7 +973,7 @@ class httpretty(HttpBaseClass):
 
         socket.__dict__['socket'] = old_socket
         socket.__dict__['_socketobject'] = old_socket
-        socket.__dict__['SocketType'] = old_socket
+        socket.__dict__['SocketType'] = old_SocketType
 
         socket.__dict__['create_connection'] = old_create_connection
         socket.__dict__['gethostname'] = old_gethostname
@@ -1040,6 +1041,17 @@ class httpretty(HttpBaseClass):
                 ssl.__dict__['sslwrap_simple'] = fake_wrap_socket
 
 
+class httprettized(object):
+
+    def __enter__(self):
+        httpretty.reset()
+        httpretty.enable()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        httpretty.disable()
+        httpretty.reset()
+
+
 def httprettified(test):
     "A decorator tests that use HTTPretty"
     def decorate_class(klass):
@@ -1057,12 +1069,8 @@ def httprettified(test):
     def decorate_callable(test):
         @functools.wraps(test)
         def wrapper(*args, **kw):
-            httpretty.reset()
-            httpretty.enable()
-            try:
+            with httprettized():
                 return test(*args, **kw)
-            finally:
-                httpretty.disable()
         return wrapper
 
     if isinstance(test, ClassTypes):
